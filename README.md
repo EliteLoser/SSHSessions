@@ -4,3 +4,4 @@ Svendsen Tech's SSH-Sessions module provides SSH session creation, management an
 Check out the comprehensive online documentation here on my blog:
 http://www.powershelladmin.com/wiki/SSH_from_PowerShell_using_the_SSH.NET_library 
 
+![alt tag](/PowerShell-SSH-Sessions-pipeline-support.png)
