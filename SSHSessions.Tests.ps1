@@ -3,12 +3,12 @@
 Svendsen Tech.
 #>
 
-Import-Module -Name Pester -Verbose:$False -ErrorAction Stop
+Import-Module -Name Pester -ErrorAction Stop #-Verbose:$False 
 $VerbosePreference = "SilentlyContinue"
 #$ComputerName = "www.svendsentech.no"
 $ComputerName = ""
 
-Import-Module -Name SSHSessions -ErrorAction Stop -Verbose:$False
+Import-Module -Name SSHSessions -ErrorAction Stop #-Verbose:$False
 
 if (-not (Get-Variable -Name PesterSSHSessionsCredentials -Scope Global -ErrorAction SilentlyContinue)) {
     Write-Warning -Message "You need to: `$Global:PesterSSHSessionsCredentials = Get-Credential # and to provide the SSH user credentials before running the tests (I know this sucks...)"
@@ -19,9 +19,9 @@ if ($ComputerName -eq "") {
     exit
 }
 
-Describe New-SshSession {
+Describe SshSessions {
 
-    It "Test establishing an SSH session" {
+    It "Test New-SshSession" {
         if ((Get-SshSession -ComputerName $ComputerName).Connected -eq $True) {
             Write-Verbose -Message "Terminating existing SSH session to $ComputerName." -Verbose
             $Null = Remove-SshSession -ComputerName $ComputerName -ErrorAction SilentlyContinue
@@ -30,11 +30,9 @@ Describe New-SshSession {
         $Result | Should -Match "^(?:Successfully connected|You are already connected) to $ComputerName$"
     }
 
-    It "Test an echo statement and verify that output is as expected" {
+    It "Test Invoke-SshCommand with an echo statement and verify that output is as expected" {
         $Result = Invoke-SshCommand -ComputerName $ComputerName -Quiet -Command "echo 'This is a test'" -ErrorAction Stop
         $Result | Should -Be "This is a test"
     }
-
-
 
 }
