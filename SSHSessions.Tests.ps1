@@ -1,4 +1,4 @@
-﻿#requires -version 3
+#requires -version 3
 <# Pester 4.x tests for SSH-Sessions/SSHSessions. Joakim Borger Svendsen.
 Svendsen Tech.
 #>
