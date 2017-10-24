@@ -12,6 +12,7 @@ Import-Module -Name SSHSessions -ErrorAction Stop #-Verbose:$False
 
 if (-not (Get-Variable -Name PesterSSHSessionsCredentials -Scope Global -ErrorAction SilentlyContinue)) {
     Write-Warning -Message "You need to: `$Global:PesterSSHSessionsCredentials = Get-Credential # and to provide the SSH user credentials before running the tests (I know this sucks...)"
+    exit
 }
 
 if ($ComputerName -eq "") {
