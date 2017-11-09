@@ -35,5 +35,7 @@ Describe SshSessions {
         $Result = Invoke-SshCommand -ComputerName $ComputerName -Quiet -Command "echo 'This is a test'" -ErrorAction Stop
         $Result | Should -Be "This is a test"
     }
-
+    
+    $Null = Remove-SshSession -ComputerName $ComputerName
+    
 }
