@@ -33,9 +33,15 @@ Describe SshSessions {
 
     It "Test Invoke-SshCommand. Verify simple echo statement output is as expected" {
         $Result = Invoke-SshCommand -ComputerName $ComputerName -Quiet -Command "echo 'This is a test'" -ErrorAction Stop
-        $Result | Should -Be "This is a test"
+        $Result[0] | Should -Be "This is a test"
     }
     
+    It "Test piping Get-SshSession to Invoke-SshCommand" {
+        $Result = Get-SshSession -ComputerName $ComputerName | Invoke-SshCommand -Quiet -Command "echo 'This is a test'" `
+            -ErrorAction Stop
+        $Result[0] | Should -Be "This is a test"
+    }
+
     It "Test New-SshSession's -Reconnect parameter" {
         $Result = New-SshSession -ComputerName $ComputerName -Reconnect -Credential $Global:PesterSSHSessionsCredentials `
             -ErrorAction SilentlyContinue
