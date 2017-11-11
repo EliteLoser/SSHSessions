@@ -28,14 +28,23 @@ Describe SshSessions {
             $Null = Remove-SshSession -ComputerName $ComputerName -ErrorAction SilentlyContinue
         }
         $Result = New-SshSession -ComputerName $ComputerName -Credential $Global:PesterSSHSessionsCredentials -ErrorAction Stop
-        $Result | Should -Match "^(?:Successfully connected|You are already connected) to $ComputerName$"
+        $Result | Should -Be "[$ComputerName] Successfully connected."
     }
 
-    It "Test Invoke-SshCommand with an echo statement and verify that output is as expected" {
+    It "Test Invoke-SshCommand. Verify simple echo statement output is as expected" {
         $Result = Invoke-SshCommand -ComputerName $ComputerName -Quiet -Command "echo 'This is a test'" -ErrorAction Stop
         $Result | Should -Be "This is a test"
     }
     
-    $Null = Remove-SshSession -ComputerName $ComputerName
-    
+    It "Test New-SshSession's -Reconnect parameter" {
+        $Result = New-SshSession -ComputerName $ComputerName -Reconnect -Credential $Global:PesterSSHSessionsCredentials `
+            -ErrorAction SilentlyContinue
+        $Result | Should -Match "\[$([Regex]::Escape($ComputerName))\] Successfully connected"
+    }
+
+    It "Test Remove-SshSession" {
+        $Result = Remove-SshSession -ComputerName $ComputerName -ErrorAction SilentlyContinue
+        $Result | Should -Match "\[$([Regex]::Escape($ComputerName))\] Now disconnected and disposed"
+    }
+
 }
