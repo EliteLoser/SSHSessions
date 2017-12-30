@@ -235,7 +235,10 @@ function Invoke-SshCommand {
     .PARAMETER ComputerName
         Target hosts to invoke command on.
     .PARAMETER Command
-        Required. The Linux command to run on specified target computers.
+        Required unless you use -ScriptBlock. The Linux command to run on specified target computers.
+    .PARAMETER ScriptBlock
+        Required unless you use -Command. The Linux command to run on specified target computers.
+        More convenient than a string for complex nested quotes, etc.
     .PARAMETER Quiet
         Causes no colored output to be written by Write-Host. If you assign results to a
         variable, no progress indication will be shown.
@@ -244,13 +247,29 @@ function Invoke-SshCommand {
         Overrides -ComputerName, but you will be asked politely if you want to continue,
         if you specify both parameters.
     #>
-    [CmdletBinding()]
-    param([Parameter(ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
-              [Alias('Cn', 'IPAddress', 'Hostname', 'Name', 'PSComputerName')]
-              [String[]] $ComputerName, # can't have it mandatory due to -InvokeOnAll...
-          [Parameter(Mandatory=$true)][string] $Command,
-          [Switch] $Quiet,
-          [Switch] $InvokeOnAll)
+    [CmdletBinding(
+        DefaultParameterSetName = "Command"
+    )]
+    param(
+        [Parameter(ValueFromPipeline = $true,
+            ValueFromPipelineByPropertyName = $true,
+            Position = 0
+        )]
+        [Alias('Cn', 'IPAddress', 'Hostname', 'Name', 'PSComputerName')]
+        [String[]] $ComputerName, # can't have it mandatory due to -InvokeOnAll...
+    
+        [Parameter(Mandatory = $true,
+            ParameterSetName="String",
+            Position = 1)]
+        [String] $Command,
+
+        [Parameter(Mandatory = $true,
+            ParameterSetName="ScriptBlock",
+            Position = 1)]
+        [ScriptBlock] $ScriptBlock,
+
+        [Switch] $Quiet,
+        [Switch] $InvokeOnAll)
     begin {
         if ($InvokeOnAll) {
             if ($ComputerName) {
@@ -282,12 +301,15 @@ function Invoke-SshCommand {
                 "No SSH session found for $Computer. See Get-Help New-SshSession. Skipping."
                 continue
             }
-            if (-not $global:SshSessions.$Computer.IsConnected) {
+            if (-not $Global:SshSessions.$Computer.IsConnected) {
                 Write-Verbose -Message "You are no longer connected to $Computer. Skipping."
                 "You are no longer connected to $Computer. Skipping."
                 continue
             }
-            $CommandObject = $global:SshSessions.$Computer.RunCommand($Command)
+            if ($PSCmdlet.ParameterSetName -eq "ScriptBlock") {
+                $Command = $ScriptBlock.ToString()
+            }
+            $CommandObject = $Global:SshSessions.$Computer.RunCommand($Command)
             # Write "pretty", colored results with Write-Host unless the quiet switch is provided.
             if (-not $Quiet) {
                 if ($CommandObject.ExitStatus -eq 0) {
