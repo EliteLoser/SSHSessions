@@ -24,10 +24,7 @@
     Get-Help Enter-SshSession
     Get-Help Remove-SshSession
 
-    http://www.powershelladmin.com/wiki/SSH_from_PowerShell_using_the_SSH.NET_library
-
-2017-01-26: Rewriting a bit (about damn time). Not fixing completely.
-            No concurrency for now either. Preparing to publish to PS gallery.
+    https://www.powershelladmin.com/wiki/SSH_from_PowerShell_using_the_SSH.NET_library
 
 #>
 
