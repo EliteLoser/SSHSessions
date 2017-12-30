@@ -1,4 +1,4 @@
-﻿#requires -version 3
+#requires -version 3
 
 
 <#
@@ -33,7 +33,6 @@
 
 
 # Function to convert a secure string to a plain text password.
-# (no longer used by the module, kept in case someone finds it useful...)
 # See http://www.powershelladmin.com/wiki/Powershell_prompt_for_password_convert_securestring_to_plain_text
 function ConvertFrom-SecureToPlain {
     param(
@@ -87,18 +86,27 @@ function New-SshSession {
         Optional. Default 22. Target port the SSH server uses.
     #>
     [CmdletBinding()]
-    param([Parameter(Mandatory = $true,
-                     ValueFromPipeline = $true,
-                     ValueFromPipelineByPropertyName = $true)]
-               [Alias('Cn', 'IPAddress', 'Hostname', 'Name', 'PSComputerName')]
-               [String[]] $ComputerName,
-          [String] $Username = '',
-          [String] $KeyFile = '',
-          [String] $KeyPass = 'SvendsenTechDefault',
-          [System.Management.Automation.PSCredential] [System.Management.Automation.Credential()] $KeyCredential = [System.Management.Automation.PSCredential]::Empty,
-          [System.Management.Automation.PSCredential] [System.Management.Automation.Credential()] $Credential = [System.Management.Automation.PSCredential]::Empty,
-          [String] $Password = 'SvendsenTechDefault', # I guess allowing for a blank password is "wise"...
-          [Int32] $Port = 22)
+    param(
+        [Parameter(Mandatory = $true,
+                   ValueFromPipeline = $true,
+                   ValueFromPipelineByPropertyName = $true)]
+            [Alias('Cn', 'IPAddress', 'Hostname', 'Name', 'PSComputerName')]
+            [String[]] $ComputerName,
+        [String] $Username = '',
+        [String] $KeyFile = '',
+        [String] $KeyPass = 'SvendsenTechDefault', # allow for blank password
+        
+        [System.Management.Automation.PSCredential]
+        [System.Management.Automation.Credential()]
+        $KeyCredential = [System.Management.Automation.PSCredential]::Empty,
+        
+        [System.Management.Automation.PSCredential]
+        [System.Management.Automation.Credential()]
+        $Credential = [System.Management.Automation.PSCredential]::Empty,
+        
+        [String] $Password = 'SvendsenTechDefault', # I guess allowing for a blank password is "wise"...
+        [Int32] $Port = 22,
+        [Switch] $Reconnect)
     begin {
         if ($KeyFile -ne '') {
             Write-Verbose -Message "Key file specified. Will override password. Trying to read key file..."
@@ -145,14 +153,24 @@ function New-SshSession {
             if ($Key -and $KeyPass -ceq 'SvendsenTechDefault') {
                 $SecurePassword = ConvertTo-SecureString -String "doh" -AsPlainText -Force # for keys with no password
             }
-            $Credential = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $SecurePassword
+            $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $Username, $SecurePassword
         }
     }
     process {
         # Let's start creating sessions and storing them in $global:SshSessions
         foreach ($Computer in $ComputerName) {
-            if ($global:SshSessions.ContainsKey($Computer) -and $global:SshSessions.$Computer.IsConnected) {
-                "You are already connected to $Computer"
+            if ($Global:SshSessions.ContainsKey($Computer) -and $Reconnect) {
+                Write-Verbose -Message "${Computer}: Reconnecting..."
+                try {
+                    $Null = Remove-SshSession -ComputerName $Computer -ErrorAction Stop
+                }
+                catch {
+                    Write-Warning -Message "[$Computer] Unable to disconnect SSH session. Skipping connect attempt."
+                    continue
+                }
+            }
+            elseif ($Global:SshSessions.ContainsKey($Computer) -and $Global:SshSessions.$Computer.IsConnected) {
+                "[$Computer] You are already connected."
                 continue
             }
             try {
@@ -164,22 +182,22 @@ function New-SshSession {
                 }
             }
             catch {
-                "Unable to create SSH client object for ${Computer}: $_"
+                "[$Computer] Unable to create SSH client object: $_"
                 continue
             }
             try {
                 $SshClient.Connect()
             }
             catch {
-                "Unable to connect to ${Computer}: $_"
+                Write-Warning -Message "[$Computer] Unable to connect: $_"
                 continue
             }
             if ($SshClient -and $SshClient.IsConnected) {
-                "Successfully connected to $Computer"
-                $global:SshSessions.$Computer = $SshClient
+                "[$Computer] Successfully connected."
+                $Global:SshSessions.$Computer = $SshClient
             }
             else {
-                "Unable to connect to ${Computer}"
+                "[$Computer] Unable to connect."
                 continue
             }
         } # end of foreach
@@ -187,6 +205,7 @@ function New-SshSession {
     end {
         # Shrug... Can't hurt although I guess they should go out of scope here anyway.
         $KeyPass, $SecurePassword, $Password = $null, $null, $null
+        [System.GC]::Collect()
     }
 }
 
@@ -325,7 +344,7 @@ function Enter-SshSession {
         return
     }
     if (-not $Global:SshSessions.$ComputerName.IsConnected) {
-        "The connection to $Computer has been lost"
+        "[$Computer] The connection has been lost. See Get-Help New-SshSession and notice the -Reconnect parameter."
         return
     }
     $SshPwd = ''
@@ -342,7 +361,7 @@ function Enter-SshSession {
     $Command = ''
     while (1) {
         if (-not $Global:SshSessions.$ComputerName.IsConnected) {
-            "Connection to $Computer lost"
+            "[$Computer] Connection lost."
             return
         }
         $Command = Read-Host -Prompt "[$ComputerName]: $SshPwd # "
@@ -401,7 +420,7 @@ function Remove-SshSession {
     }
     foreach ($Computer in $ComputerName) {
         if (-not $Global:SshSessions.ContainsKey($Computer)) {
-            "The global `$SshSessions variable doesn't contain a session for $Computer. Skipping."
+            "[$Computer] The global `$SshSessions variable doesn't contain a session for $Computer. Skipping."
             continue
         }
         $ErrorActionPreference = 'Continue'
@@ -410,7 +429,7 @@ function Remove-SshSession {
         $Global:SshSessions.$Computer = $null
         $Global:SshSessions.Remove($Computer)
         $ErrorActionPreferene = $MyEAP
-        "$Computer should now be disconnected and disposed."
+        "[$Computer] Now disconnected and disposed."
     }
 }
 
@@ -457,7 +476,7 @@ function Get-SshSession {
                 $Global:SshSessions.$_.IsConnected
             }
             else {
-                'NULL'
+                $Null
             }
         }}
     # Process the hosts and emit output to the pipeline.

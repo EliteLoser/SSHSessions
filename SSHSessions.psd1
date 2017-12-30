@@ -1,16 +1,20 @@
-﻿# Module manifest for module 'SSH-Sessions.psm1'
+# Module manifest for module 'SSH-Sessions.psm1'
 #
 # Created by: Joakim Svendsen
 #
 # Created on: 2012-04-19
 #
+# 1.9 - Add -Reconnect to New-SshSession. Standardize output more to Ansible style.
+# Some breaking changes if output is parsed, due to this.
+#
+
 @{
 
 # Script module or binary module file associated with this manifest
 RootModule = 'SSHSessions.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.8'
+ModuleVersion = '1.9'
 
 # ID used to uniquely identify this module
 GUID = '65be3f86-9eda-469a-9b2f-2cca1840bbf6'
@@ -64,16 +68,17 @@ FormatsToProcess = @()
 NestedModules = @()
 
 # Functions to export from this module
-FunctionsToExport = @("New-SshSession", "Invoke-SshCommand", "Enter-SshSession", "Remove-SshSession", "Get-SshSession", "ConvertFrom-SecureToPlain")
+FunctionsToExport = @("New-SshSession", "Invoke-SshCommand", "Enter-SshSession",
+    "Remove-SshSession", "Get-SshSession", "ConvertFrom-SecureToPlain")
 
 # Cmdlets to export from this module
-CmdletsToExport = '*'
+CmdletsToExport = ''
 
 # Variables to export from this module
-VariablesToExport = '*'
+VariablesToExport = ''
 
 # Aliases to export from this module
-AliasesToExport = '*'
+AliasesToExport = ''
 
 # List of all modules packaged with this module
 ModuleList = @()
