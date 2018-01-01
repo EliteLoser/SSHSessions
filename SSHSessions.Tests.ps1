@@ -5,8 +5,8 @@ Svendsen Tech.
 
 Import-Module -Name Pester -ErrorAction Stop #-Verbose:$False 
 $VerbosePreference = "SilentlyContinue"
-#$ComputerName = "www.svendsentech.no"
-$ComputerName = ""
+$ComputerName = "www.svendsentech.no"
+#$ComputerName = ""
 
 Import-Module -Name SSHSessions -ErrorAction Stop #-Verbose:$False
 
@@ -22,7 +22,7 @@ if ($ComputerName -eq "") {
 
 Describe SshSessions {
 
-    It "Test New-SshSession" {
+    It "New-SshSession creates a new SSH session successfully to the test target." {
         if ((Get-SshSession -ComputerName $ComputerName).Connected -eq $True) {
             Write-Verbose -Message "Terminating existing SSH session to $ComputerName." -Verbose
             $Null = Remove-SshSession -ComputerName $ComputerName -ErrorAction SilentlyContinue
@@ -31,24 +31,24 @@ Describe SshSessions {
         $Result | Should -Be "[$ComputerName] Successfully connected."
     }
 
-    It "Test Invoke-SshCommand. Verify simple echo statement output is as expected" {
+    It "Invoke-SshCommand produces expected simple remote 'echo' test output." {
         $Result = Invoke-SshCommand -ComputerName $ComputerName -Quiet -Command "echo 'This is a test'" -ErrorAction Stop
-        $Result[0] | Should -Be "This is a test"
+        $Result[0].Result | Should -Be "This is a test"
     }
     
-    It "Test piping Get-SshSession to Invoke-SshCommand" {
+    It "Piping Get-SshSession to Invoke-SshCommand works." {
         $Result = Get-SshSession -ComputerName $ComputerName | Invoke-SshCommand -Quiet -Command "echo 'This is a test'" `
             -ErrorAction Stop
-        $Result[0] | Should -Be "This is a test"
+        $Result[0].Result | Should -Be "This is a test"
     }
 
-    It "Test New-SshSession's -Reconnect parameter" {
+    It "The -Reconnect parameter for New-SshSession works." {
         $Result = New-SshSession -ComputerName $ComputerName -Reconnect -Credential $Global:PesterSSHSessionsCredentials `
             -ErrorAction SilentlyContinue
         $Result | Should -Match "\[$([Regex]::Escape($ComputerName))\] Successfully connected"
     }
 
-    It "Test Remove-SshSession" {
+    It "Remove-SshSession works." {
         $Result = Remove-SshSession -ComputerName $ComputerName -ErrorAction SilentlyContinue
         $Result | Should -Match "\[$([Regex]::Escape($ComputerName))\] Now disconnected and disposed"
     }
