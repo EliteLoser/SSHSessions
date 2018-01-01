@@ -15,6 +15,8 @@
 #        thousands of meta scripts using this module - and some might be parsing
 #        the output to determine success. I will look into redesigning and
 #        standardizing further. Pushing this for now.
+# v2.1 - Standardize completely to Write-Warning, Write-Error and Write-Verbose.
+#        Possibly another, recent breaking change.
 
 @{
 
@@ -22,7 +24,7 @@
 RootModule = 'SSHSessions.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.0'
+ModuleVersion = '2.1'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -118,15 +120,9 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        ReleaseNotes = '# Add a -ScriptBlock parameter for Invoke-SshCommand (less escaped quotes).
-# Vastly improved pipeline handling.
-# v2.0 - Emit objects instead of strings. Majorly breaking change, but
-#        I think it''s needed and much better. Have been considering switching
-#        to Write-Verbose for a lot of the output and have it quiet by default (New/Remove), as is
-#        the convention, but I imagine that after 6 years in the wild, there are
-#        thousands of meta scripts using this module - and some might be parsing
-#        the output to determine success. I will look into redesigning and
-#        standardizing further. Pushing this for now.'
+        ReleaseNotes = '# v2.1 - Standardize (almost) completely to Write-Warning, Write-Error and Write-Verbose.
+# Possibly another, recent breaking change if people are
+  parsing New-SshSession output, etc. (like my tests do, must fix).'
 
         # External dependent modules of this module
         # ExternalModuleDependencies = ''

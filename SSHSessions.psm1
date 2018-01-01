@@ -171,7 +171,7 @@ function New-SshSession {
                 }
             }
             elseif ($Global:SshSessions.ContainsKey($Computer) -and $Global:SshSessions.$Computer.IsConnected) {
-                "[$Computer] You are already connected."
+                Write-Verbose -Message "[$Computer] You are already connected." -Verbose
                 continue
             }
             try {
@@ -183,7 +183,7 @@ function New-SshSession {
                 }
             }
             catch {
-                "[$Computer] Unable to create SSH client object: $_"
+                Write-Warning -Message "[$Computer] Unable to create SSH client object: $_"
                 continue
             }
             try {
@@ -194,11 +194,11 @@ function New-SshSession {
                 continue
             }
             if ($SshClient -and $SshClient.IsConnected) {
-                "[$Computer] Successfully connected."
+                Write-Verbose -Message "[$Computer] Successfully connected."
                 $Global:SshSessions.$Computer = $SshClient
             }
             else {
-                "[$Computer] Unable to connect."
+                Write-Warning -Message "[$Computer] Unable to connect."
                 continue
             }
         } # end of foreach
@@ -276,7 +276,7 @@ function Invoke-SshCommand {
             if ($ComputerName) {
                 $Answer = Read-Host -Prompt "You specified both -InvokeOnAll and -ComputerName. -InvokeOnAll overrides and targets all hosts.`nAre you sure you want to continue? (y/n) [yes]"
                 if ($Answer -imatch '^n') {
-                    Write-Error -Message "Aborting." -ErrorAction Stop
+                    Write-Warning -Message "Aborting." -ErrorAction Stop
                     break
                 }
             }
@@ -299,13 +299,13 @@ function Invoke-SshCommand {
     process {
         , @(foreach ($Computer in $ComputerName) {
             if (-not $Global:SshSessions.ContainsKey($Computer)) {
-                Write-Verbose -Message "No SSH session found for $Computer. See Get-Help New-SshSession. Skipping."
-                "[$Computer] No SSH session found. See Get-Help New-SshSession. Skipping."
+                #Write-Verbose -Message "No SSH session found for $Computer. See Get-Help New-SshSession. Skipping."
+                Write-Warning -Message "[$Computer] No SSH session found. See Get-Help New-SshSession. Skipping."
                 continue
             }
             if (-not $Global:SshSessions.$Computer.IsConnected) {
-                Write-Verbose -Message "You are no longer connected to $Computer. Skipping."
-                "[$Computer] You are no longer connected. Skipping."
+                #Write-Verbose -Message "You are no longer connected to $Computer. Skipping."
+                Write-Warning -Message "[$Computer] You are no longer connected. Skipping."
                 continue
             }
             if ($PSCmdlet.ParameterSetName -eq "ScriptBlock") {
@@ -332,20 +332,21 @@ function Invoke-SshCommand {
                 # Emit results to the pipeline. Twice the fun unless you're assigning the results to a variable.
                 # Changed from .Trim(). Remove the trailing carriage returns and newlines that might be there,
                 # in case leading whitespace matters in later processing. Not sure I should even be doing this.
-                New-Object -TypeName PSObject -Property @{
+                [PSCustomObject] @{
                     ComputerName = $Computer
                     Result = $CommandObject.Result -replace '[\r\n]+\z'
                     Error = $False
-                } | Select-Object -Property ComputerName, Result, Error
+                }
             }
             else {
                 # Same comment as above applies ...
                 #$CommandObject.Error -replace '[\r\n]+\z', ''
-                New-Object -TypeName PSObject -Property @{
+                #New-Object -TypeName PSObject -Property @{
+                [PSCustomObject] @{
                     ComputerName = $Computer
                     Result = $CommandObject.Error -replace '[\r\n]+\z'
                     Error = $True
-                } | Select-Object -Property ComputerName, Result, Error
+                } # | Select-Object -Property ComputerName, Result, Error
             }
             #>
             $CommandObject.Dispose()
@@ -375,14 +376,16 @@ function Enter-SshSession {
     .PARAMETER NoPwd
         Optional. Do not try to include the default remote working directory in the prompt.
     #>
-    param([Parameter(Mandatory=$true)] [Alias('Cn', 'PSComputerName')] [string] $ComputerName,
-          [switch] $NoPwd)
+    param([Parameter(Mandatory=$true)] [Alias('Name', 'IPAddress', 'Cn', 'PSComputerName')] [string] $ComputerName,
+            [switch] $NoPwd)
     if (-not $Global:SshSessions.ContainsKey($ComputerName)) {
-        "No SSH session found for $Computer. See Get-Help New-SshSession. Skipping."
+        Write-Error -Message "[$Computer] No SSH session found. See Get-Help New-SshSession. Skipping." `
+            -ErrorAction Stop
         return
     }
     if (-not $Global:SshSessions.$ComputerName.IsConnected) {
-        "[$Computer] The connection has been lost. See Get-Help New-SshSession and notice the -Reconnect parameter."
+        Write-Error -Message "[$Computer] The connection has been lost. See Get-Help New-SshSession and notice the -Reconnect parameter." `
+            -ErrorAction Stop
         return
     }
     $SshPwd = ''
@@ -399,7 +402,7 @@ function Enter-SshSession {
     $Command = ''
     while (1) {
         if (-not $Global:SshSessions.$ComputerName.IsConnected) {
-            "[$Computer] Connection lost."
+            Write-Error -Message "[$Computer] Connection lost." -ErrorAction Stop
             return
         }
         $Command = Read-Host -Prompt "[$ComputerName]: $SshPwd # "
@@ -448,7 +451,7 @@ function Remove-SshSession {
                 }
             }
             if ($Global:SshSessions.Keys.Count -eq 0) {
-                "-RemoveAll specified, but no hosts found."
+                Write-Error -Message "Parameter -RemoveAll specified, but no hosts found." -ErrorAction Stop
                 break
             }
             # Get all computer names from the global SshSessions hashtable.
@@ -463,7 +466,7 @@ function Remove-SshSession {
     process {
         foreach ($Computer in $ComputerName) {
             if (-not $Global:SshSessions.ContainsKey($Computer)) {
-                "[$Computer] The SSH client pool does not contain a session for this computer. Skipping."
+                Write-Warning -Message "[$Computer] The SSH client pool does not contain a session for this computer. Skipping."
                 continue
             }
             $ErrorActionPreference = 'Continue'
@@ -472,7 +475,7 @@ function Remove-SshSession {
             $Global:SshSessions.$Computer = $null
             $Global:SshSessions.Remove($Computer)
             $ErrorActionPreferene = $MyEAP
-            "[$Computer] Now disconnected and disposed."
+            Write-Verbose -Message "[$Computer] Now disconnected and disposed."
         }
     }
 }
