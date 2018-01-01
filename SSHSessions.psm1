@@ -122,7 +122,8 @@ function New-SshSession {
                     $Key = New-Object -TypeName Renci.SshNet.PrivateKeyFile -ArgumentList $Keyfile -ErrorAction Stop
                 }
                 else {
-                    $Key = New-Object -TypeName Renci.SshNet.PrivateKeyFile -ArgumentList $Keyfile, $KeyCredential.GetNetworkCredential().Password -ErrorAction Stop
+                    $Key = New-Object -TypeName Renci.SshNet.PrivateKeyFile -ArgumentList $Keyfile,
+                        $KeyCredential.GetNetworkCredential().Password -ErrorAction Stop
                 }
             }
             else {
@@ -157,10 +158,10 @@ function New-SshSession {
         }
     }
     process {
-        # Let's start creating sessions and storing them in $global:SshSessions
+        # Let's start creating sessions and storing them in $Global:SshSessions
         foreach ($Computer in $ComputerName) {
             if ($Global:SshSessions.ContainsKey($Computer) -and $Reconnect) {
-                Write-Verbose -Message "${Computer}: Reconnecting..."
+                Write-Verbose -Message "[$Computer] Reconnecting."
                 try {
                     $Null = Remove-SshSession -ComputerName $Computer -ErrorAction Stop
                 }
@@ -235,7 +236,10 @@ function Invoke-SshCommand {
     .PARAMETER ComputerName
         Target hosts to invoke command on.
     .PARAMETER Command
-        Required. The Linux command to run on specified target computers.
+        Required unless you use -ScriptBlock. The Linux command to run on specified target computers.
+    .PARAMETER ScriptBlock
+        Required unless you use -Command. The Linux command to run on specified target computers.
+        More convenient than a string for complex nested quotes, etc.
     .PARAMETER Quiet
         Causes no colored output to be written by Write-Host. If you assign results to a
         variable, no progress indication will be shown.
@@ -244,13 +248,29 @@ function Invoke-SshCommand {
         Overrides -ComputerName, but you will be asked politely if you want to continue,
         if you specify both parameters.
     #>
-    [CmdletBinding()]
-    param([Parameter(ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
-              [Alias('Cn', 'IPAddress', 'Hostname', 'Name', 'PSComputerName')]
-              [String[]] $ComputerName, # can't have it mandatory due to -InvokeOnAll...
-          [Parameter(Mandatory=$true)][string] $Command,
-          [Switch] $Quiet,
-          [Switch] $InvokeOnAll)
+    [CmdletBinding(
+        DefaultParameterSetName = "Command"
+    )]
+    param(
+        [Parameter(ValueFromPipeline = $true,
+            ValueFromPipelineByPropertyName = $true,
+            Position = 0
+        )]
+        [Alias('Cn', 'IPAddress', 'Hostname', 'Name', 'PSComputerName')]
+        [String[]] $ComputerName, # can't have it mandatory due to -InvokeOnAll...
+    
+        [Parameter(Mandatory = $true,
+            ParameterSetName="String",
+            Position = 1)]
+        [String] $Command,
+
+        [Parameter(Mandatory = $true,
+            ParameterSetName="ScriptBlock",
+            Position = 1)]
+        [ScriptBlock] $ScriptBlock,
+
+        [Switch] $Quiet,
+        [Switch] $InvokeOnAll)
     begin {
         if ($InvokeOnAll) {
             if ($ComputerName) {
@@ -270,6 +290,7 @@ function Invoke-SshCommand {
                 [Regex]::Replace($_, '(\d+)', { '{0:D16}' -f [int] $args[0].Value }) }
             }, @{ Expression = { $_ } }
         }
+        # Better pipeline support requires this to be removed / commented out.
         #if (-not $ComputerName) {
         #    "No computer names specified and -InvokeOnAll not specified. Can not continue."
         #    break
@@ -279,15 +300,18 @@ function Invoke-SshCommand {
         , @(foreach ($Computer in $ComputerName) {
             if (-not $Global:SshSessions.ContainsKey($Computer)) {
                 Write-Verbose -Message "No SSH session found for $Computer. See Get-Help New-SshSession. Skipping."
-                "No SSH session found for $Computer. See Get-Help New-SshSession. Skipping."
+                "[$Computer] No SSH session found. See Get-Help New-SshSession. Skipping."
                 continue
             }
-            if (-not $global:SshSessions.$Computer.IsConnected) {
+            if (-not $Global:SshSessions.$Computer.IsConnected) {
                 Write-Verbose -Message "You are no longer connected to $Computer. Skipping."
-                "You are no longer connected to $Computer. Skipping."
+                "[$Computer] You are no longer connected. Skipping."
                 continue
             }
-            $CommandObject = $global:SshSessions.$Computer.RunCommand($Command)
+            if ($PSCmdlet.ParameterSetName -eq "ScriptBlock") {
+                $Command = $ScriptBlock.ToString()
+            }
+            $CommandObject = $Global:SshSessions.$Computer.RunCommand($Command)
             # Write "pretty", colored results with Write-Host unless the quiet switch is provided.
             if (-not $Quiet) {
                 if ($CommandObject.ExitStatus -eq 0) {
@@ -300,18 +324,32 @@ function Invoke-SshCommand {
                 }
             }
             # Now emit to the pipeline
+            # 2018-01-01: Super breaking change! Emit the entire $CommandObject for easier ways to play with the
+            # properties. ... Changed my mind, but will return objects, which is equally breaking.
+            #$CommandObject
+            
             if ($CommandObject.ExitStatus -eq 0) {
                 # Emit results to the pipeline. Twice the fun unless you're assigning the results to a variable.
                 # Changed from .Trim(). Remove the trailing carriage returns and newlines that might be there,
                 # in case leading whitespace matters in later processing. Not sure I should even be doing this.
-                $CommandObject.Result -replace '[\r\n]+\z', ''
+                New-Object -TypeName PSObject -Property @{
+                    ComputerName = $Computer
+                    Result = $CommandObject.Result -replace '[\r\n]+\z'
+                    Error = $False
+                } | Select-Object -Property ComputerName, Result, Error
             }
             else {
                 # Same comment as above applies ...
-                $CommandObject.Error -replace '[\r\n]+\z', ''
+                #$CommandObject.Error -replace '[\r\n]+\z', ''
+                New-Object -TypeName PSObject -Property @{
+                    ComputerName = $Computer
+                    Result = $CommandObject.Error -replace '[\r\n]+\z'
+                    Error = $True
+                } | Select-Object -Property ComputerName, Result, Error
             }
+            #>
             $CommandObject.Dispose()
-            $CommandObject = $null
+            $CommandObject = $Null
         })
     }
     end {
@@ -396,40 +434,46 @@ function Remove-SshSession {
         Overrides -ComputerName, but you will be asked politely if you are sure,
         if you specify both.
     #>
+    [CmdletBinding()]
     param([Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
               [Alias('Cn', 'IPAddress', 'Hostname', 'Name', 'PSComputerName')]
-              [string[]] $ComputerName, # can't have it mandatory due to -RemoveAll
-          [switch]   $RemoveAll)
-    if ($RemoveAll) {
-        if ($ComputerName) {
-            $Answer = Read-Host -Prompt "You specified both -RemoveAll and -ComputerName. -RemoveAll overrides and removes all connections.`nAre you sure you want to continue? (y/n) [yes]"
-            if ($Answer -imatch 'n') {
-                return
+              [String[]] $ComputerName, # can't have it mandatory due to -RemoveAll
+          [Switch]   $RemoveAll)
+    begin {
+        if ($RemoveAll) {
+            if ($ComputerName) {
+                $Answer = Read-Host -Prompt "You specified both -RemoveAll and -ComputerName. -RemoveAll overrides and removes all connections.`nAre you sure you want to continue? (y/n) [yes]"
+                if ($Answer -imatch 'n') {
+                    break
+                }
             }
+            if ($Global:SshSessions.Keys.Count -eq 0) {
+                "-RemoveAll specified, but no hosts found."
+                break
+            }
+            # Get all computer names from the global SshSessions hashtable.
+            $ComputerName = $Global:SshSessions.Keys | Sort-Object
         }
-        if ($Global:SshSessions.Keys.Count -eq 0) {
-            "-RemoveAll specified, but no hosts found."
-            return
-        }
-        # Get all computer names from the global SshSessions hashtable.
-        $ComputerName = $global:SshSessions.Keys | Sort-Object
+        <# The logic breaks with pipeline input from Get-SshSession
+        if (-not $ComputerName) {
+            "No computer names specified and -RemoveAll not specified. Can not continue."
+            break
+        }#>
     }
-    if (-not $ComputerName) {
-        "No computer names specified and -RemoveAll not specified. Can not continue."
-        return
-    }
-    foreach ($Computer in $ComputerName) {
-        if (-not $Global:SshSessions.ContainsKey($Computer)) {
-            "[$Computer] The global `$SshSessions variable doesn't contain a session for $Computer. Skipping."
-            continue
+    process {
+        foreach ($Computer in $ComputerName) {
+            if (-not $Global:SshSessions.ContainsKey($Computer)) {
+                "[$Computer] The SSH client pool does not contain a session for this computer. Skipping."
+                continue
+            }
+            $ErrorActionPreference = 'Continue'
+            if ($Global:SshSessions.$Computer.IsConnected) { $Global:SshSessions.$Computer.Disconnect() }
+            $Global:SshSessions.$Computer.Dispose()
+            $Global:SshSessions.$Computer = $null
+            $Global:SshSessions.Remove($Computer)
+            $ErrorActionPreferene = $MyEAP
+            "[$Computer] Now disconnected and disposed."
         }
-        $ErrorActionPreference = 'Continue'
-        if ($Global:SshSessions.$Computer.IsConnected) { $Global:SshSessions.$Computer.Disconnect() }
-        $Global:SshSessions.$Computer.Dispose()
-        $Global:SshSessions.$Computer = $null
-        $Global:SshSessions.Remove($Computer)
-        $ErrorActionPreferene = $MyEAP
-        "[$Computer] Now disconnected and disposed."
     }
 }
 
@@ -458,29 +502,41 @@ function Get-SshSession {
         status if a non-existing host name/IP is passed in.
     #>
     
+    [CmdletBinding()]
     param([Alias('Cn', 'IPAddress', 'Hostname', 'Name', 'PSComputerName')] [string[]] $ComputerName)
     
-    # Just exit with a message if there aren't any connections.
-    if ($Global:SshSessions.Count -eq 0) {
-        "No connections found"
-        return
+    begin {
+        # Just exit with a message if there aren't any connections.
+        if ($Global:SshSessions.Count -eq 0) {
+            Write-Error -Message "No connections found"
+            break
+        }
     }
-    # Unless $ComputerName is specified, use all hosts in the global variable, sorted alphabetically.
-    if (-not $ComputerName) { $ComputerName = $Global:SshSessions.Keys | Sort-Object }
-    $Properties =
-        @{n='ComputerName';e={$_}},
-        @{n='Connected';e={
-            # Ok, this isn't too pretty... Populate non-existing objects'
-            # "connected" value with "NULL".
-            if ($Global:SshSessions.ContainsKey($_)) {
-                $Global:SshSessions.$_.IsConnected
-            }
-            else {
-                $Null
-            }
-        }}
-    # Process the hosts and emit output to the pipeline.
-    $ComputerName | Select-Object -Property $Properties
+    process {
+        if (-not $ComputerName) { $ComputerName = $Global:SshSessions.Keys | Sort-Object -Property @{
+            Expression = {
+                # Intent: Sort IP addresses correctly.
+                [Regex]::Replace($_, '(\d+)', { '{0:D16}' -f [int] $args[0].Value }) }
+            }, @{ Expression = { $_ } }
+        }
+        foreach ($Computer in $ComputerName) {        
+            # Unless $ComputerName is specified, use all hosts in the global variable, sorted alphabetically.
+            $Properties =
+                @{n='ComputerName';e={$_}},
+                @{n='Connected';e={
+                    # Ok, this isn't too pretty... Populate non-existing objects'
+                    # "connected" value with $null
+                    if ($Global:SshSessions.ContainsKey($_)) {
+                        $Global:SshSessions.$_.IsConnected
+                    }
+                    else {
+                        $Null
+                    }
+                }}
+            # Process the hosts and emit output to the pipeline.
+            $Computer | Select-Object -Property $Properties
+        }
+    }
 }
 ######## END OF FUNCTIONS ########
 Set-StrictMode -Version Latest
