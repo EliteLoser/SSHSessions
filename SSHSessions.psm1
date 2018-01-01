@@ -122,7 +122,8 @@ function New-SshSession {
                     $Key = New-Object -TypeName Renci.SshNet.PrivateKeyFile -ArgumentList $Keyfile -ErrorAction Stop
                 }
                 else {
-                    $Key = New-Object -TypeName Renci.SshNet.PrivateKeyFile -ArgumentList $Keyfile, $KeyCredential.GetNetworkCredential().Password -ErrorAction Stop
+                    $Key = New-Object -TypeName Renci.SshNet.PrivateKeyFile -ArgumentList $Keyfile,
+                        $KeyCredential.GetNetworkCredential().Password -ErrorAction Stop
                 }
             }
             else {
@@ -289,6 +290,7 @@ function Invoke-SshCommand {
                 [Regex]::Replace($_, '(\d+)', { '{0:D16}' -f [int] $args[0].Value }) }
             }, @{ Expression = { $_ } }
         }
+        # Better pipeline support requires this to be removed / commented out.
         #if (-not $ComputerName) {
         #    "No computer names specified and -InvokeOnAll not specified. Can not continue."
         #    break
@@ -298,12 +300,12 @@ function Invoke-SshCommand {
         , @(foreach ($Computer in $ComputerName) {
             if (-not $Global:SshSessions.ContainsKey($Computer)) {
                 Write-Verbose -Message "No SSH session found for $Computer. See Get-Help New-SshSession. Skipping."
-                "No SSH session found for $Computer. See Get-Help New-SshSession. Skipping."
+                "[$Computer] No SSH session found. See Get-Help New-SshSession. Skipping."
                 continue
             }
             if (-not $Global:SshSessions.$Computer.IsConnected) {
                 Write-Verbose -Message "You are no longer connected to $Computer. Skipping."
-                "You are no longer connected to $Computer. Skipping."
+                "[$Computer] You are no longer connected. Skipping."
                 continue
             }
             if ($PSCmdlet.ParameterSetName -eq "ScriptBlock") {
@@ -322,18 +324,32 @@ function Invoke-SshCommand {
                 }
             }
             # Now emit to the pipeline
+            # 2018-01-01: Super breaking change! Emit the entire $CommandObject for easier ways to play with the
+            # properties. ... Changed my mind, but will return objects, which is equally breaking.
+            #$CommandObject
+            
             if ($CommandObject.ExitStatus -eq 0) {
                 # Emit results to the pipeline. Twice the fun unless you're assigning the results to a variable.
                 # Changed from .Trim(). Remove the trailing carriage returns and newlines that might be there,
                 # in case leading whitespace matters in later processing. Not sure I should even be doing this.
-                $CommandObject.Result -replace '[\r\n]+\z', ''
+                New-Object -TypeName PSObject -Property @{
+                    ComputerName = $Computer
+                    Result = $CommandObject.Result -replace '[\r\n]+\z'
+                    Error = $False
+                } | Select-Object -Property ComputerName, Result, Error
             }
             else {
                 # Same comment as above applies ...
-                $CommandObject.Error -replace '[\r\n]+\z', ''
+                #$CommandObject.Error -replace '[\r\n]+\z', ''
+                New-Object -TypeName PSObject -Property @{
+                    ComputerName = $Computer
+                    Result = $CommandObject.Error -replace '[\r\n]+\z'
+                    Error = $True
+                } | Select-Object -Property ComputerName, Result, Error
             }
+            #>
             $CommandObject.Dispose()
-            $CommandObject = $null
+            $CommandObject = $Null
         })
     }
     end {
@@ -436,7 +452,7 @@ function Remove-SshSession {
                 break
             }
             # Get all computer names from the global SshSessions hashtable.
-            $ComputerName = $global:SshSessions.Keys | Sort-Object
+            $ComputerName = $Global:SshSessions.Keys | Sort-Object
         }
         <# The logic breaks with pipeline input from Get-SshSession
         if (-not $ComputerName) {
@@ -447,7 +463,7 @@ function Remove-SshSession {
     process {
         foreach ($Computer in $ComputerName) {
             if (-not $Global:SshSessions.ContainsKey($Computer)) {
-                "[$Computer] The global `$SshSessions variable doesn't contain a session for $Computer. Skipping."
+                "[$Computer] The SSH client pool does not contain a session for this computer. Skipping."
                 continue
             }
             $ErrorActionPreference = 'Continue'
