@@ -24,7 +24,10 @@
     Get-Help Enter-SshSession
     Get-Help Remove-SshSession
 
-    https://www.powershelladmin.com/wiki/SSH_from_PowerShell_using_the_SSH.NET_library
+    http://www.powershelladmin.com/wiki/SSH_from_PowerShell_using_the_SSH.NET_library
+
+2017-01-26: Rewriting a bit (about damn time). Not fixing completely.
+            No concurrency for now either. Preparing to publish to PS gallery.
 
 #>
 
@@ -154,10 +157,10 @@ function New-SshSession {
         }
     }
     process {
-        # Let's start creating sessions and storing them in $global:SshSessions
+        # Let's start creating sessions and storing them in $Global:SshSessions
         foreach ($Computer in $ComputerName) {
             if ($Global:SshSessions.ContainsKey($Computer) -and $Reconnect) {
-                Write-Verbose -Message "${Computer}: Reconnecting..."
+                Write-Verbose -Message "[$Computer] Reconnecting."
                 try {
                     $Null = Remove-SshSession -ComputerName $Computer -ErrorAction Stop
                 }
@@ -415,40 +418,46 @@ function Remove-SshSession {
         Overrides -ComputerName, but you will be asked politely if you are sure,
         if you specify both.
     #>
+    [CmdletBinding()]
     param([Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
               [Alias('Cn', 'IPAddress', 'Hostname', 'Name', 'PSComputerName')]
-              [string[]] $ComputerName, # can't have it mandatory due to -RemoveAll
-          [switch]   $RemoveAll)
-    if ($RemoveAll) {
-        if ($ComputerName) {
-            $Answer = Read-Host -Prompt "You specified both -RemoveAll and -ComputerName. -RemoveAll overrides and removes all connections.`nAre you sure you want to continue? (y/n) [yes]"
-            if ($Answer -imatch 'n') {
-                return
+              [String[]] $ComputerName, # can't have it mandatory due to -RemoveAll
+          [Switch]   $RemoveAll)
+    begin {
+        if ($RemoveAll) {
+            if ($ComputerName) {
+                $Answer = Read-Host -Prompt "You specified both -RemoveAll and -ComputerName. -RemoveAll overrides and removes all connections.`nAre you sure you want to continue? (y/n) [yes]"
+                if ($Answer -imatch 'n') {
+                    break
+                }
             }
+            if ($Global:SshSessions.Keys.Count -eq 0) {
+                "-RemoveAll specified, but no hosts found."
+                break
+            }
+            # Get all computer names from the global SshSessions hashtable.
+            $ComputerName = $global:SshSessions.Keys | Sort-Object
         }
-        if ($Global:SshSessions.Keys.Count -eq 0) {
-            "-RemoveAll specified, but no hosts found."
-            return
-        }
-        # Get all computer names from the global SshSessions hashtable.
-        $ComputerName = $global:SshSessions.Keys | Sort-Object
+        <# The logic breaks with pipeline input from Get-SshSession
+        if (-not $ComputerName) {
+            "No computer names specified and -RemoveAll not specified. Can not continue."
+            break
+        }#>
     }
-    if (-not $ComputerName) {
-        "No computer names specified and -RemoveAll not specified. Can not continue."
-        return
-    }
-    foreach ($Computer in $ComputerName) {
-        if (-not $Global:SshSessions.ContainsKey($Computer)) {
-            "[$Computer] The global `$SshSessions variable doesn't contain a session for $Computer. Skipping."
-            continue
+    process {
+        foreach ($Computer in $ComputerName) {
+            if (-not $Global:SshSessions.ContainsKey($Computer)) {
+                "[$Computer] The global `$SshSessions variable doesn't contain a session for $Computer. Skipping."
+                continue
+            }
+            $ErrorActionPreference = 'Continue'
+            if ($Global:SshSessions.$Computer.IsConnected) { $Global:SshSessions.$Computer.Disconnect() }
+            $Global:SshSessions.$Computer.Dispose()
+            $Global:SshSessions.$Computer = $null
+            $Global:SshSessions.Remove($Computer)
+            $ErrorActionPreferene = $MyEAP
+            "[$Computer] Now disconnected and disposed."
         }
-        $ErrorActionPreference = 'Continue'
-        if ($Global:SshSessions.$Computer.IsConnected) { $Global:SshSessions.$Computer.Disconnect() }
-        $Global:SshSessions.$Computer.Dispose()
-        $Global:SshSessions.$Computer = $null
-        $Global:SshSessions.Remove($Computer)
-        $ErrorActionPreferene = $MyEAP
-        "[$Computer] Now disconnected and disposed."
     }
 }
 
@@ -477,29 +486,41 @@ function Get-SshSession {
         status if a non-existing host name/IP is passed in.
     #>
     
+    [CmdletBinding()]
     param([Alias('Cn', 'IPAddress', 'Hostname', 'Name', 'PSComputerName')] [string[]] $ComputerName)
     
-    # Just exit with a message if there aren't any connections.
-    if ($Global:SshSessions.Count -eq 0) {
-        "No connections found"
-        return
+    begin {
+        # Just exit with a message if there aren't any connections.
+        if ($Global:SshSessions.Count -eq 0) {
+            Write-Error -Message "No connections found"
+            break
+        }
     }
-    # Unless $ComputerName is specified, use all hosts in the global variable, sorted alphabetically.
-    if (-not $ComputerName) { $ComputerName = $Global:SshSessions.Keys | Sort-Object }
-    $Properties =
-        @{n='ComputerName';e={$_}},
-        @{n='Connected';e={
-            # Ok, this isn't too pretty... Populate non-existing objects'
-            # "connected" value with "NULL".
-            if ($Global:SshSessions.ContainsKey($_)) {
-                $Global:SshSessions.$_.IsConnected
-            }
-            else {
-                $Null
-            }
-        }}
-    # Process the hosts and emit output to the pipeline.
-    $ComputerName | Select-Object -Property $Properties
+    process {
+        if (-not $ComputerName) { $ComputerName = $Global:SshSessions.Keys | Sort-Object -Property @{
+            Expression = {
+                # Intent: Sort IP addresses correctly.
+                [Regex]::Replace($_, '(\d+)', { '{0:D16}' -f [int] $args[0].Value }) }
+            }, @{ Expression = { $_ } }
+        }
+        foreach ($Computer in $ComputerName) {        
+            # Unless $ComputerName is specified, use all hosts in the global variable, sorted alphabetically.
+            $Properties =
+                @{n='ComputerName';e={$_}},
+                @{n='Connected';e={
+                    # Ok, this isn't too pretty... Populate non-existing objects'
+                    # "connected" value with $null
+                    if ($Global:SshSessions.ContainsKey($_)) {
+                        $Global:SshSessions.$_.IsConnected
+                    }
+                    else {
+                        $Null
+                    }
+                }}
+            # Process the hosts and emit output to the pipeline.
+            $Computer | Select-Object -Property $Properties
+        }
+    }
 }
 ######## END OF FUNCTIONS ########
 Set-StrictMode -Version Latest
