@@ -17,6 +17,9 @@
 #        standardizing further. Pushing this for now.
 # v2.1 - Standardize completely to Write-Warning, Write-Error and Write-Verbose.
 #        Possibly another, recent breaking change.
+# v2.1.1 - Fix a bug that caused the calling scripts to terminate when
+#        Get-SshSession and Remove-SshSession -RemoveAll were called (tested on PS v5.1).
+#        Worked around.
 
 @{
 
@@ -24,7 +27,7 @@
 RootModule = 'SSHSessions.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.1'
+ModuleVersion = '2.1.1'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -39,10 +42,10 @@ Author = 'Joakim Borger Svendsen'
 CompanyName = 'Svendsen Tech'
 
 # Copyright statement for this module
-Copyright = 'Copyright (c) 2012-2017, Joakim Borger Svendsen, Svendsen Tech. All rights reserved.'
+Copyright = 'Copyright (c) 2012-2018, Joakim Borger Svendsen, Svendsen Tech. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Svendsen Tech''s SSH-Sessions module provides SSH session creation, management and interaction from PowerShell. Lets you execute commands via SSH against Linux and certain network equipment, etc. MIT license. Online documentation here: http://www.powershelladmin.com/wiki/SSH_from_PowerShell_using_the_SSH.NET_library'
+Description = 'Svendsen Tech''s SSH-Sessions module provides SSH session creation, management and interaction from PowerShell. Lets you execute commands via SSH against Linux and certain network equipment, etc. MIT license. Online documentation here: https://www.powershelladmin.com/wiki/SSH_from_PowerShell_using_the_SSH.NET_library'
 
 # Minimum version of the Windows PowerShell engine required by this module
 PowerShellVersion = '3.0'
@@ -100,7 +103,7 @@ AliasesToExport = @()
 # ModuleList = @()
 
 # List of all files packaged with this module
-FileList = 'Renci.SshNet.dll', 'SSHSessions.psm1', 'SSHSessions.psd1'
+FileList = @('Renci.SshNet.dll', 'SSHSessions.psm1', 'SSHSessions.psd1', 'SSHSessions.Tests.ps1')
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
 PrivateData = @{
@@ -108,7 +111,7 @@ PrivateData = @{
     PSData = @{
 
         # Tags applied to this module. These help with module discovery in online galleries.
-        Tags = @('SSH', 'Linux', 'Unix', 'Cisco', 'Juniper', 'Networking')
+        Tags = @('SSH', 'Linux', 'Unix', 'Cisco', 'Networking')
 
         # A URL to the license for this module.
         # LicenseUri = ''
@@ -120,9 +123,8 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        ReleaseNotes = '# v2.1 - Standardize (almost) completely to Write-Warning, Write-Error and Write-Verbose.
-# Possibly another, recent breaking change if people are
-  parsing New-SshSession output, etc. (like my tests do, must fix).'
+        ReleaseNotes = '# v2.1.1 - Fix a bug that caused the calling scripts to terminate when
+# Get-SshSession and Remove-SshSession -RemoveAll were called (tested on PS v5.1). Worked around.'
 
         # External dependent modules of this module
         # ExternalModuleDependencies = ''
@@ -138,4 +140,3 @@ PrivateData = @{
 # DefaultCommandPrefix = ''
 
 }
-
