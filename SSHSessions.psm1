@@ -451,8 +451,12 @@ function Remove-SshSession {
                 }
             }
             if ($Global:SshSessions.Keys.Count -eq 0) {
-                Write-Error -Message "Parameter -RemoveAll specified, but no hosts found." -ErrorAction Stop
-                break
+                Write-Warning -Message "Parameter -RemoveAll specified, but no hosts found."
+                # This terminates the calling script (I had noe clue it behaved like that, honestly, was surprised).
+                # My workaround is relying on that the above check for both -ComputerName and -RemoveAll
+                # makes the process block moot unless someone is piping in, in which case Get-SshSession will halt before
+                # this advanced function is called. Based on feedback.
+                #break
             }
             # Get all computer names from the global SshSessions hashtable.
             $ComputerName = $Global:SshSessions.Keys | Sort-Object
@@ -511,8 +515,9 @@ function Get-SshSession {
     begin {
         # Just exit with a message if there aren't any connections.
         if ($Global:SshSessions.Count -eq 0) {
-            Write-Error -Message "No connections found"
-            break
+            Write-Warning -Message "No connections found."
+            # This terminates the calling script too (so I learned today, at least in v5.1). Removing.
+            #break
         }
     }
     process {
