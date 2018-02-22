@@ -116,7 +116,7 @@ function New-SshSession {
             }
             if (Test-Path -PathType Leaf -Path $Keyfile) {
                 if ($KeyPass -cne "SvendsenTechDefault") {
-                    $Key = New-Object Renci.SshNet.PrivateKeyFile -ErrorAction Stop -ArgumentList $KeyFile, $KeyPass -ErrorAction Stop
+                    $Key = New-Object -TypeName Renci.SshNet.PrivateKeyFile -ArgumentList $KeyFile, $KeyPass -ErrorAction Stop
                 }
                 elseif ($KeyCredential.Password -notmatch '\S') {
                     $Key = New-Object -TypeName Renci.SshNet.PrivateKeyFile -ArgumentList $Keyfile -ErrorAction Stop
@@ -453,9 +453,8 @@ function Remove-SshSession {
             if ($Global:SshSessions.Keys.Count -eq 0) {
                 Write-Warning -Message "Parameter -RemoveAll specified, but no hosts found."
                 # This terminates the calling script (I had noe clue it behaved like that, honestly, was surprised).
-                # My workaround is relying on that the above check for both -ComputerName and -RemoveAll
-                # makes the process block moot unless someone is piping in, in which case Get-SshSession will halt before
-                # this advanced function is called. Based on feedback.
+                # My workaround relies on that the process block will not be run when you pipe in an
+                # "empty Get-SshSession".
                 #break
             }
             # Get all computer names from the global SshSessions hashtable.
