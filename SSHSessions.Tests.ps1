@@ -29,7 +29,7 @@ Describe SshSessions {
         }#>
         $Result = (New-SshSession -ComputerName $ComputerName -Verbose `
             -Credential $Global:PesterSSHSessionsCredentials -ErrorAction Stop) 4>&1
-        $Result.Message | Should -Match "\[$([Regex]::Escape($ComputerName))\] (?:Successfully connected.|You are already connected.)"
+        $Result.Message | Should -Match "\[$([Regex]::Escape($ComputerName))\]\s*(?:Successfully connected|You are already connected)"
     }
 
     It "Invoke-SshCommand produces expected simple remote 'echo' test output." {
