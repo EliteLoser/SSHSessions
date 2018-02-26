@@ -249,7 +249,7 @@ function Invoke-SshCommand {
         if you specify both parameters.
     #>
     [CmdletBinding(
-        DefaultParameterSetName = "Command"
+        DefaultParameterSetName = "String"
     )]
     param(
         [Parameter(ValueFromPipeline = $true,
@@ -264,7 +264,7 @@ function Invoke-SshCommand {
             Position = 1)]
         [String] $Command,
 
-        [Parameter(Mandatory = $true,
+        [Parameter(Mandatory = $True,
             ParameterSetName="ScriptBlock",
             Position = 1)]
         [ScriptBlock] $ScriptBlock,
@@ -272,17 +272,21 @@ function Invoke-SshCommand {
         [Switch] $Quiet,
         [Switch] $InvokeOnAll)
     begin {
+        $WtfSkipFlag = $False
         if ($InvokeOnAll) {
             if ($ComputerName) {
                 $Answer = Read-Host -Prompt "You specified both -InvokeOnAll and -ComputerName. -InvokeOnAll overrides and targets all hosts.`nAre you sure you want to continue? (y/n) [yes]"
-                if ($Answer -imatch '^n') {
-                    Write-Warning -Message "Aborting." -ErrorAction Stop
+                if ($Answer -imatch 'n') {
+                    Write-Warning -Message "Aborting."
                     break
                 }
             }
             if ($Global:SshSessions.Keys.Count -eq 0) {
                 Write-Warning -Message "-InvokeOnAll specified, but no hosts found. See Get-Help New-SshSession."
-                break
+                # Remove the below 'break' so calling scripts don't terminate unwantedly. Done in v2.1.3.
+                # $ComputerName will be empty below so it doesn't really matter and then we avoid the unwanted calling
+                # script termination.
+                #break
             }
             # Get all computer names from the global SshSessions hashtable.
             $ComputerName = $Global:SshSessions.Keys | Sort-Object -Property @{ Expression = {
@@ -290,14 +294,9 @@ function Invoke-SshCommand {
                 [Regex]::Replace($_, '(\d+)', { '{0:D16}' -f [int] $args[0].Value }) }
             }, @{ Expression = { $_ } }
         }
-        # Better pipeline support requires this to be removed / commented out.
-        #if (-not $ComputerName) {
-        #    "No computer names specified and -InvokeOnAll not specified. Can not continue."
-        #    break
-        #}
     }
     process {
-        , @(foreach ($Computer in $ComputerName) {
+        ,@(foreach ($Computer in $ComputerName) {
             if (-not $Global:SshSessions.ContainsKey($Computer)) {
                 #Write-Verbose -Message "No SSH session found for $Computer. See Get-Help New-SshSession. Skipping."
                 Write-Warning -Message "[$Computer] No SSH session found. See Get-Help New-SshSession. Skipping."
