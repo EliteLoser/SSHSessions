@@ -5,6 +5,7 @@ Svendsen Tech.
 
 Import-Module -Name Pester -ErrorAction Stop #-Verbose:$False 
 $VerbosePreference = "SilentlyContinue"
+
 #$ComputerName = "www.svendsentech.no"
 $ComputerName = ""
 
@@ -43,15 +44,20 @@ Describe SshSessions {
         $Result[0].Result | Should -Be "This is a test"
     }
 
-    It "The -Reconnect parameter for New-SshSession works." {
-        $Result = (New-SshSession -ComputerName $ComputerName -Reconnect -Credential $Global:PesterSSHSessionsCredentials `
-            -ErrorAction SilentlyContinue -Verbose) 4>&1
-        $Result[2].Message | Should -Match "\[$([Regex]::Escape($ComputerName))\] Successfully connected"
-    }
-
     It "Remove-SshSession works." {
         $Result = (Remove-SshSession -ComputerName $ComputerName -ErrorAction SilentlyContinue -Verbose) 4>&1
         $Result.Message | Should -Match "\[$([Regex]::Escape($ComputerName))\] Now disconnected and disposed"
     }
+
+    It "The -Reconnect parameter for New-SshSession works." {
+        $Result = (New-SshSession -ComputerName $ComputerName -Verbose `
+            -Credential $Global:PesterSSHSessionsCredentials -ErrorAction Stop) 4>&1
+        $Result.Message | Should -Match "\[$([Regex]::Escape($ComputerName))\]\s*(?:Successfully connected|You are already connected)"
+        $Result = (New-SshSession -ComputerName $ComputerName -Reconnect -Credential $Global:PesterSSHSessionsCredentials `
+            -ErrorAction SilentlyContinue -Verbose) 4>&1
+        $Result[2].Message | Should -Match "\[$([Regex]::Escape($ComputerName))\]\s*Successfully\s+connected"
+    }
+
+    Get-SshSession | Remove-SshSession
 
 }
