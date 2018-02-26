@@ -20,8 +20,11 @@
 # v2.1.1 - Fix a bug that caused the calling scripts to terminate when
 #        Get-SshSession and Remove-SshSession -RemoveAll were called (tested on PS v5.1).
 #        Worked around.
-# v2.1.2 - Fix bug with two -ErrorAction Stop calls when using a key password and not
+# v2.1.2 - Fix bug with two -ErrorAction Stop calls when using a key password not
 #          in a credentials object. Syntax error for that scenario.
+# v2.1.3 - Fix so Invoke-SshCommand -InvokeOnAll no longer terminates calling scripts when
+#          there are no computers in the store.
+
 
 @{
 
@@ -29,7 +32,7 @@
 RootModule = 'SSHSessions.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.1.2'
+ModuleVersion = '2.1.3'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -125,8 +128,7 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        ReleaseNotes = '# v2.1.2. Fix bug with two -ErrorAction Stop calls when using a key password not 
-in a credentials object. Syntax error for that scenario.'
+        ReleaseNotes = '# Fix so Invoke-SshCommand -InvokeOnAll no longer terminates calling scripts when there are no computers in the store.'
 
         # External dependent modules of this module
         # ExternalModuleDependencies = ''
